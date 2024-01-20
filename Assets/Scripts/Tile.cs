@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-public class Tile : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+public class Tile : MonoBehaviour//, IPointerEnterHandler, IPointerExitHandler
 {
     [SerializeField]
     Image image;
@@ -23,7 +23,7 @@ public class Tile : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
         rect.localPosition = pos;
         rect.sizeDelta = new Vector2(tileRadius*2, tileRadius*2);
     }
-
+    /*
     public void OnPointerExit(PointerEventData eventData)
     {
         Board.Instance.SetCurrentTile(null);
@@ -33,4 +33,5 @@ public class Tile : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
     {
         Board.Instance.SetCurrentTile(this);
     }
+    */
 }

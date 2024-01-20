@@ -557,6 +557,7 @@ MonoBehaviour:
   phantomOrb: {fileID: 1787601374}
   phantomOrbRect: {fileID: 1787601373}
   holdOffset: {x: 0, y: 0}
+  gr: {fileID: 1863979001}
 --- !u!1 &1457777144
 GameObject:
   m_ObjectHideFlags: 0

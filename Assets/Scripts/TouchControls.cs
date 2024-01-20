@@ -1,6 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Burst.CompilerServices;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.Rendering;
 using UnityEngine.UI;
 
 public class TouchControls : MonoBehaviour
@@ -15,6 +18,10 @@ public class TouchControls : MonoBehaviour
     [SerializeField]
     Vector2 holdOffset;
 
+    [SerializeField]
+    private GraphicRaycaster gr;
+
+    private Vector3 clampedMousePos;
 
     private void Awake()
     {
@@ -26,11 +33,45 @@ public class TouchControls : MonoBehaviour
         {
             Destroy(gameObject);
         }
-
         phantomOrbRect = phantomOrb.GetComponent<RectTransform>();
     }
     void Update()
     {
+        clampedMousePos = Input.mousePosition;
+        clampedMousePos.x = Mathf.Clamp(
+            clampedMousePos.x,
+            Board.Instance.rect.position.x - Board.Instance.tileRadius * Board.Instance.boardWidth,
+            Board.Instance.rect.position.x + Board.Instance.tileRadius * Board.Instance.boardWidth);
+        clampedMousePos.y = Mathf.Clamp(
+            clampedMousePos.y, 
+            Board.Instance.rect.position.y - Board.Instance.tileRadius * Board.Instance.boardHeight,
+            Board.Instance.rect.position.y + Board.Instance.tileRadius * Board.Instance.boardHeight
+            );
+        PointerEventData ped = new PointerEventData(null);
+
+        ped.position = clampedMousePos;
+        Debug.Log(clampedMousePos);
+        List<RaycastResult> results = new List<RaycastResult>();
+        gr.Raycast(ped, results);
+        
+        if (results.Count == 0)
+        {
+            return;
+        }
+        foreach(RaycastResult r in results)
+        {
+            Tile selectedTile = r.gameObject.GetComponent<Tile>();
+            if (selectedTile)
+            {
+                Board.Instance.SetCurrentTile(selectedTile);
+                break;
+            }
+            else
+            {
+                Board.Instance.SetCurrentTile(null);
+            }
+        }
+
         if (Input.GetMouseButtonDown(0))
         {
             if (Board.Instance.currentTile)
@@ -66,7 +107,6 @@ public class TouchControls : MonoBehaviour
             Vector3 transformedPos = Input.mousePosition;
             
             transformedPos.z = 0;
-            Debug.Log(transformedPos);
             phantomOrbRect.position = Vector2.Lerp(phantomOrbRect.position, transformedPos, Time.deltaTime * 40f);
         }
     }
