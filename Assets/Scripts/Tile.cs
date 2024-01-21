@@ -14,6 +14,11 @@ public class Tile : MonoBehaviour//, IPointerEnterHandler, IPointerExitHandler
     public int y;
     public Orb currentOrb;
 
+    public Tile left => x > 0 ? Board.Instance.tiles[y, x - 1] : null;
+    public Tile bot => y > 0 ? Board.Instance.tiles[y - 1, x] : null;
+    public Tile right => x < Board.Instance.boardWidth - 1 ? Board.Instance.tiles[y, x + 1] : null;
+    public Tile top => y < Board.Instance.boardHeight - 1 ? Board.Instance.tiles[y + 1, x] : null;
+
     public void InitializeTile(int x, int y, Vector2 pos, float tileRadius,Sprite displaySprite)
     {
         this.x = x;

@@ -99,7 +99,7 @@ MonoBehaviour:
   - {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
   - {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
   image: {fileID: 8634283318568847675}
-  lerpSpeed: 40
+  lerpSpeed: 25
   rect: {fileID: 1984983777351300291}
   orbType: 0
   currentTile: {fileID: 0}

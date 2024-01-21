@@ -32,6 +32,11 @@ public class Orb : MonoBehaviour
         rect.sizeDelta = new Vector2(orbRadius * 2, orbRadius * 2);
         rect.localPosition = spawnPos;
         this.currentTile = currentTile;
+        if(currentTile != null )
+        {
+            targetLocalPos = currentTile.rect.localPosition;
+        }
+       
     }
 
     private void Update()

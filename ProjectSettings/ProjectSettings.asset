@@ -805,6 +805,7 @@ PlayerSettings:
   scriptingDefineSymbols:
     Android: FISHNET;FISHNET_V4;FISHNET_PRO
     Standalone: FISHNET;FISHNET_V4;FISHNET_PRO;FISHNET_DISABLE_V3TOV4_HELPERS
+    WebGL: FISHNET;FISHNET_V4;FISHNET_PRO
   additionalCompilerArguments: {}
   platformArchitecture: {}
   scriptingBackend: {}

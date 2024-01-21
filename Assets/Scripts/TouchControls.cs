@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Burst.CompilerServices;
@@ -8,7 +9,7 @@ using UnityEngine.UI;
 
 public class TouchControls : MonoBehaviour
 {
-
+    public bool isControlsActive = false;
     public static TouchControls Instance;
     public Orb currentOrb;
     [SerializeField]
@@ -34,9 +35,11 @@ public class TouchControls : MonoBehaviour
             Destroy(gameObject);
         }
         phantomOrbRect = phantomOrb.GetComponent<RectTransform>();
+        isControlsActive = false;
     }
     void Update()
     {
+        if(!isControlsActive) { return; }
         clampedMousePos = Input.mousePosition;
         clampedMousePos.x = Mathf.Clamp(
             clampedMousePos.x,
@@ -50,7 +53,7 @@ public class TouchControls : MonoBehaviour
         PointerEventData ped = new PointerEventData(null);
 
         ped.position = clampedMousePos;
-        Debug.Log(clampedMousePos);
+
         List<RaycastResult> results = new List<RaycastResult>();
         gr.Raycast(ped, results);
         
@@ -80,6 +83,7 @@ public class TouchControls : MonoBehaviour
                 currentOrb.GetComponent<CanvasGroup>().alpha = 0.5f;
                 phantomOrb.Initialize(currentOrb.rect.localPosition, Board.Instance.tileRadius, currentOrb.orbType, null);
                 phantomOrb.gameObject.SetActive(true);
+                GameManager.Instance.StartRound();
             }
         }
 
@@ -98,6 +102,7 @@ public class TouchControls : MonoBehaviour
                 currentOrb.SetTargetLocalPos(Board.Instance.currentTile.rect.localPosition);
                 // set currentorb targetloc
                 currentOrb = null;
+                Board.Instance.StartCoroutine(Board.Instance.ResolveBoard());
             }
         }
         if(currentOrb)
@@ -108,6 +113,25 @@ public class TouchControls : MonoBehaviour
             
             transformedPos.z = 0;
             phantomOrbRect.position = Vector2.Lerp(phantomOrbRect.position, transformedPos, Time.deltaTime * 40f);
+        }
+    }
+
+    public void ForceDropOrb()
+    {
+        if (currentOrb)
+        {
+            phantomOrb.gameObject.SetActive(false);
+            currentOrb.GetComponent<CanvasGroup>().alpha = 1f;
+            if (!Board.Instance.currentTile)
+            {
+                currentOrb.ResetTargetLocalPos();
+                currentOrb = null;
+                return;
+            }
+            currentOrb.SetTargetLocalPos(Board.Instance.currentTile.rect.localPosition);
+            // set currentorb targetloc
+            currentOrb = null;
+            Board.Instance.StartCoroutine(Board.Instance.ResolveBoard());
         }
     }
 }
