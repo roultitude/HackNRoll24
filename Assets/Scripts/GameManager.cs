@@ -26,7 +26,7 @@ public class GameManager : MonoBehaviour
 
     float timer;
     private int currStage = 0;
-    private bool roundStarted = false;
+    public bool roundStarted = false;
     [SerializeField]
     private int roundsLeft;
 

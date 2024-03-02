@@ -41,6 +41,7 @@ public class TouchControls : MonoBehaviour
     {
         if(!isControlsActive) { return; }
         clampedMousePos = Input.mousePosition;
+        
         clampedMousePos.x = Mathf.Clamp(
             clampedMousePos.x,
             Board.Instance.rect.position.x - Board.Instance.tileRadius * Board.Instance.boardWidth,
@@ -50,8 +51,9 @@ public class TouchControls : MonoBehaviour
             Board.Instance.rect.position.y - Board.Instance.tileRadius * Board.Instance.boardHeight,
             Board.Instance.rect.position.y + Board.Instance.tileRadius * Board.Instance.boardHeight
             );
+        bool isMouseOutOfBoard = clampedMousePos.x != Input.mousePosition.x || clampedMousePos.y != Input.mousePosition.y;
         PointerEventData ped = new PointerEventData(null);
-
+        Debug.Log(Board.Instance.rect.position + " " + Board.Instance.tileRadius * Board.Instance.boardWidth);
         ped.position = clampedMousePos;
 
         List<RaycastResult> results = new List<RaycastResult>();
@@ -63,6 +65,7 @@ public class TouchControls : MonoBehaviour
         }
         foreach(RaycastResult r in results)
         {
+            
             Tile selectedTile = r.gameObject.GetComponent<Tile>();
             if (selectedTile)
             {
@@ -77,13 +80,13 @@ public class TouchControls : MonoBehaviour
 
         if (Input.GetMouseButtonDown(0))
         {
-            if (Board.Instance.currentTile)
+            if (Board.Instance.currentTile && !isMouseOutOfBoard)
             {
                 currentOrb = Board.Instance.currentTile.currentOrb;
                 currentOrb.GetComponent<CanvasGroup>().alpha = 0.5f;
                 phantomOrb.Initialize(currentOrb.rect.localPosition, Board.Instance.tileRadius, currentOrb.orbType, null);
                 phantomOrb.gameObject.SetActive(true);
-                GameManager.Instance.StartRound();
+                
             }
         }
 

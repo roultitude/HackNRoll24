@@ -99,6 +99,10 @@ public class Board : MonoBehaviour
 
     private void Swap(Tile from, Tile to, bool playAudio = false)
     {
+        if(!GameManager.Instance.roundStarted)
+        {
+            GameManager.Instance.StartRound();
+        }
         Orb fromOrb = from.currentOrb;
         from.currentOrb = to.currentOrb;
         to.currentOrb = fromOrb;
