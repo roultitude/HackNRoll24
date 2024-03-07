@@ -112,15 +112,11 @@ namespace FishNet.Component.Prediction
         /// Gets the value for SmoothTicks.
         /// </summary>
         /// <returns></returns>
-        [Obsolete("No longer used. This setting has been replaced by Smoothing Type.")]//Remove on 2023/06/01
-        public bool GetSmoothTicks() => true;
         /// <summary>
         /// Sets the value for SmoothTicks.
         /// </summary>
         /// <param name="value"></param>
         /// <returns></returns>
-        [Obsolete("No longer used. This setting has been replaced by Smoothing Type.")] //Remove on 2023/06/01
-        public void SetSmoothTicks(bool value) { }
         /// <summary>
         /// True to smooth position on owner objects.
         /// </summary>
@@ -140,31 +136,6 @@ namespace FishNet.Component.Prediction
         [Range(0, 255)]
         [SerializeField]
         private byte _ownerInterpolation = 1;
-        /// <summary>
-        /// Gets the iterpolation value to use when the owner of this object.
-        /// </summary>
-        /// <param name="asOwner">True to get the interpolation for when owner, false to get the interpolation for when a spectator.</param>
-        [Obsolete("No longer used. This setting has been replaced by Smoothing Type.")]//Remove on 2023/06/01
-        public byte GetInterpolation(bool asOwner) => 0;
-        /// <summary>
-        /// Sets the interpolation value to use when the owner of this object.
-        /// </summary>
-        /// <param name="value"></param>
-        /// <param name="asOwner">True to set the interpolation for when owner, false to set interpolation for when a spectator.</param>
-        [Obsolete("No longer used. This setting has been replaced by Smoothing Type.")]//Remove on 2023/06/01
-        public void SetInterpolation(byte value, bool asOwner)
-        {
-            //if (asOwner)
-            //{
-            //    _ownerInterpolation = value;
-            //    _ownerSmoother?.SetInterpolation(value);
-            //}
-            //else
-            //{
-            //    _spectatorInterpolation = value;
-            //    _spectatorSmoother?.SetInterpolation(value);
-            //}
-        }
         /// <summary>
         /// Type of prediction movement which is being used.
         /// </summary>
@@ -560,14 +531,14 @@ namespace FishNet.Component.Prediction
                 if (_rigidbody.isKinematic)
                     warn = true;
                 _rigidbody.collisionDetectionMode = CollisionDetectionMode.Continuous;
-                _rigidbodyPauser.UpdateRigidbodies(transform, RigidbodyType.Rigidbody, true, _graphicalObject);
+                _rigidbodyPauser.UpdateRigidbodies(transform, RigidbodyType.Rigidbody, true);
             }
             else
             {
                 if (_rigidbody2d.isKinematic || !_rigidbody2d.simulated)
                     warn = true;
                 _rigidbody2d.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-                _rigidbodyPauser.UpdateRigidbodies(transform, RigidbodyType.Rigidbody2D, true, _graphicalObject);
+                _rigidbodyPauser.UpdateRigidbodies(transform, RigidbodyType.Rigidbody2D, true);
             }
 
             if (warn)

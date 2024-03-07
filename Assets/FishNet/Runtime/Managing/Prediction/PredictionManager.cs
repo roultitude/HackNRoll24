@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
+using static FishNet.Managing.Predicting.PredictionManager;
 using UnityScene = UnityEngine.SceneManagement.Scene;
 
 
@@ -60,6 +61,19 @@ namespace FishNet.Managing.Predicting
         public event Action<uint, PhysicsScene, PhysicsScene2D> OnPostReplicateReplay;
 #else
         /// <summary>
+        /// Called before Physics SyncTransforms are run after a reconcile.
+        /// This will only invoke if physics are set to TimeManager, within the TimeManager inspector.
+        /// </summary>
+        public event PrePhysicsSyncTransformDel OnPrePhysicsTransformSync;
+        public delegate void PrePhysicsSyncTransformDel(uint clientTick, uint serverTick);
+        /// <summary>
+        /// Called after Physics SyncTransforms are run after a reconcile.
+        /// This will only invoke if physics are set to TimeManager, within the TimeManager inspector.
+        /// </summary>
+        public event PostPhysicsSyncTransformDel OnPostPhysicsTransformSync;
+        public delegate void PostPhysicsSyncTransformDel(uint clientTick, uint serverTick);
+
+        /// <summary>
         /// Called before physics is simulated when replaying a replicate method.
         /// </summary>
         public event PreReplicateReplayDel OnPreReplicateReplay;
@@ -97,14 +111,10 @@ namespace FishNet.Managing.Predicting
         /// True if rigidbodies are being predicted.
         /// </summary>
         internal bool UsingRigidbodies => (_rigidbodies.Count > 0);
-#endif
         /// <summary>
-        /// Returns if any prediction is replaying.
+        /// True if prediction is replaying.
         /// </summary>
-        /// <returns></returns>
-        public bool IsReplaying() => _isReplaying;
-        private bool _isReplaying;
-#if !PREDICTION_V2
+        public bool IsReplaying() => (_replayingScenes.Count > 0); 
         /// <summary>
         /// Returns if scene is replaying.
         /// </summary>
@@ -113,13 +123,28 @@ namespace FishNet.Managing.Predicting
         public bool IsReplaying(UnityScene scene) => _replayingScenes.Contains(scene);
 #else
         /// <summary>
-        /// LocalTick for this client as received from the last received state update. This value becomes unset when the tick ends.
+        /// True if prediction is currently reconciling. While reconciling run replicates will be replays.
         /// </summary>
-        internal uint StateClientTick;
+        public bool IsReconciling { get; private set; }
         /// <summary>
-        /// LocalTick for the server as received from the last received state update. This value becomes unset when the tick ends.
+        /// When not unset this is the current tick which local client is replaying authoraitive inputs on.
         /// </summary>
-        internal uint StateServerTick;
+        public uint ClientReplayTick { get; private set; } = TimeManager.UNSET_TICK;
+        /// <summary>
+        /// When not unset this is the current tick which local client is replaying non-authoraitive inputs on.
+        /// </summary>
+        public uint ServerReplayTick { get; private set; } = TimeManager.UNSET_TICK;
+        /// <summary>
+        /// Local tick on the most recent performed reconcile.
+        /// </summary>
+        public uint ClientStateTick { get; private set; } = TimeManager.UNSET_TICK;
+        /// <summary>
+        /// Server tick on the most recent performed reconcile.
+        /// </summary>
+        public uint ServerStateTick { get; private set; } = TimeManager.UNSET_TICK;
+#endif
+#if !PREDICTION_V2
+
 #endif
         #endregion
 
@@ -127,18 +152,29 @@ namespace FishNet.Managing.Predicting
         /// <summary>
         /// 
         /// </summary>
-        [Tooltip("Number of inputs to keep in queue should the server miss receiving an input update from the client. " +
-            "Higher values will increase the likeliness of the server always having input from the client while lower values will allow the client input to run on the server faster. " +
+        [Tooltip("Number of inputs to keep in queue for server and clients. " +
+            "Higher values will increase the likeliness of continous user created data to arrive successfully. " +
+            "Lower values will increase processing rate of received replicates. +" +
             "This value cannot be higher than MaximumServerReplicates.")]
-        [Range(1, 15)]
+        [Range(0, 15)]
         [SerializeField]
-        private ushort _queuedInputs = 1;
+        private byte _queuedInputs = 1;
+#if PREDICTION_V2
+        /// <summary>
+        /// Number of inputs to keep in queue for server and clients.
+        /// Higher values will increase the likeliness of continous user created data to arrive successfully.
+        /// Lower values will increase processing rate of received replicates.
+        /// This value cannot be higher than MaximumServerReplicates.
+        /// </summary>
+        public byte QueuedInputs => _queuedInputs;
+#else
         /// <summary>
         /// Number of inputs to keep in queue should the server miss receiving an input update from the client.
         /// Higher values will increase the likeliness of the server always having input from the client while lower values will allow the client input to run on the server faster.
         /// This value cannot be higher than MaximumServerReplicates.
         /// </summary>
         public ushort QueuedInputs => (ushort)(_queuedInputs + 1);
+#endif
         /// <summary>
         /// 
         /// </summary>
@@ -155,19 +191,20 @@ namespace FishNet.Managing.Predicting
         /// </summary>
         [Tooltip("Maximum number of replicates a server can queue per object. Higher values will put more load on the server and add replicate latency for the client.")]
         [SerializeField]
-        private ushort _maximumServerReplicates = 15;
+        private byte _maximumServerReplicates = 15;
         /// <summary>
         /// Maximum number of replicates a server can queue per object. Higher values will put more load on the server and add replicate latency for the client.
         /// </summary>
-        public ushort GetMaximumServerReplicates() => _maximumServerReplicates;
+        public byte GetMaximumServerReplicates() => _maximumServerReplicates;
         /// <summary>
         /// Sets the maximum number of replicates a server can queue per object.
         /// </summary>
         /// <param name="value"></param>
-        public void SetMaximumServerReplicates(ushort value)
+        public void SetMaximumServerReplicates(byte value)
         {
-            _maximumServerReplicates = (ushort)Mathf.Clamp(value, MINIMUM_REPLICATE_QUEUE_SIZE, MAXIMUM_REPLICATE_QUEUE_SIZE);
+            _maximumServerReplicates = (byte)Mathf.Clamp(value, MINIMUM_REPLICATE_QUEUE_SIZE, MAXIMUM_REPLICATE_QUEUE_SIZE);
         }
+#if !PREDICTION_V2
         /// <summary>
         /// 
         /// </summary>
@@ -178,6 +215,7 @@ namespace FishNet.Managing.Predicting
         /// Maximum number of excessive replicates which can be consumed per tick. Consumption count will scale up to this value automatically.
         /// </summary>
         internal byte MaximumReplicateConsumeCount => _maximumConsumeCount;
+#endif
         /// <summary>
         /// Clients should store no more than 2 seconds worth of replicates.
         /// </summary>
@@ -188,16 +226,11 @@ namespace FishNet.Managing.Predicting
         [Tooltip("Maximum number of past inputs which may send.")]
         [Range(MINIMUM_PAST_INPUTS, MAXIMUM_PAST_INPUTS)]
         [SerializeField]
-        private byte _redundancyCount = 3;
+        private byte _redundancyCount = 2;
         /// <summary>
         /// Maximum number of past inputs which may send and resend redundancy.
         /// </summary>
-#if UNITY_WEBGL
-//WebGL uses reliable so no reason to use redundancy.
-        internal byte RedundancyCount => 1;
-#else
         internal byte RedundancyCount => _redundancyCount;
-#endif
         /// <summary>
         /// True to allow clients to use predicted spawning. While true, each NetworkObject prefab you wish to predicted spawn must be marked as to allow this feature.
         /// </summary>
@@ -240,11 +273,16 @@ namespace FishNet.Managing.Predicting
         /// Number of reconciles dropped due to high latency.
         /// This is not necessarily needed but can save performance on machines struggling to keep up with simulations when combined with low frame rate.
         /// </summary>
-        private byte _droppedReconcilesCount = 0;
+        private byte _droppedReconcilesCount;
         /// <summary>
         /// Current reconcile state to use.
         /// </summary>
-        private StatePacket _reconcileState;
+        //private StatePacket _reconcileState;
+        private Queue<StatePacket> _reconcileStates = new Queue<StatePacket>();
+        /// <summary>
+        /// Last ordered tick read for a reconcile state.
+        /// </summary>
+        private uint _lastOrderedReadReconcileTick;
 #endif
         /// <summary>
         /// NetworkManager used with this.
@@ -256,19 +294,19 @@ namespace FishNet.Managing.Predicting
         /// <summary>
         /// Minimum number of past inputs which can be sent.
         /// </summary>
-        private const byte MINIMUM_PAST_INPUTS = 2;
+        private const byte MINIMUM_PAST_INPUTS = 1;
         /// <summary>
         /// Maximum number of past inputs which can be sent.
         /// </summary>
-        internal const byte MAXIMUM_PAST_INPUTS = 15;
+        internal const byte MAXIMUM_PAST_INPUTS = 5;
         /// <summary>
         /// Minimum amount of replicate queue size.
         /// </summary>
-        private const ushort MINIMUM_REPLICATE_QUEUE_SIZE = 10;
+        private const byte MINIMUM_REPLICATE_QUEUE_SIZE = (MINIMUM_PAST_INPUTS + 1);
         /// <summary>
         /// Maxmimum amount of replicate queue size.
         /// </summary>
-        private const ushort MAXIMUM_REPLICATE_QUEUE_SIZE = 500;
+        private const byte MAXIMUM_REPLICATE_QUEUE_SIZE = byte.MaxValue;
         #endregion
 
 #if !PREDICTION_V2
@@ -306,7 +344,6 @@ namespace FishNet.Managing.Predicting
         {
             if (obj.ConnectionState != LocalConnectionState.Started)
                 _replayingScenes.Clear();
-        _isReplaying = false;
         }
 #else
         /// <summary>
@@ -315,7 +352,7 @@ namespace FishNet.Managing.Predicting
         private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
         {
             _droppedReconcilesCount = 0;
-            _isReplaying = false;
+
         }
 #endif
 
@@ -401,7 +438,6 @@ namespace FishNet.Managing.Predicting
         [APIExclude]
         internal void InvokeOnReplicateReplay(UnityScene scene, uint tick, PhysicsScene ps, PhysicsScene2D ps2d, bool before)
         {
-            _isReplaying = before;
             if (before)
             {
                 _replayingScenes.Add(scene);
@@ -428,9 +464,10 @@ namespace FishNet.Managing.Predicting
         /// <summary>
         /// Amount to reserve for the header of a state update.
         /// 2 PacketId.
-        /// 4 Last packet tick from connection.
+        /// 4 Last replicate tick run for connection.
+        /// 4 Length unpacked.
         /// </summary>
-        internal const int STATE_HEADER_RESERVE_COUNT = 6;
+        internal const int STATE_HEADER_RESERVE_COUNT = 10;
 
         /// <summary>
         /// Clamps queued inputs to a valid value.
@@ -440,62 +477,25 @@ namespace FishNet.Managing.Predicting
             ushort startingValue = _queuedInputs;
             //Check for setting if dropping.
             if (_dropExcessiveReplicates && _queuedInputs > _maximumServerReplicates)
-                _queuedInputs = _maximumServerReplicates;
-
-            /* Check for setting if exceeding threshhold.
-             * This must be done because if the difference
-             * in queued inputs target vs actual exceeds
-             * threshold then timing will reset when it
-             * would actually need to speed up or slow down. */
-            if (_networkManager != null && _queuedInputs > _networkManager.TimeManager.RESET_ADJUSTMENT_THRESHOLD)
-                _queuedInputs = _networkManager.TimeManager.RESET_ADJUSTMENT_THRESHOLD;
+                _queuedInputs = (byte)(_maximumServerReplicates - 1);
 
             //If changed.
             if (_queuedInputs != startingValue)
                 _networkManager.Log($"QueuedInputs has been set to {_queuedInputs}.");
         }
 
-        /// <summary>
-        /// Sends written states for clients.
-        /// </summary>
-        internal void SendStates()
-        {
-            TransportManager tm = _networkManager.TransportManager;
-            foreach (NetworkConnection nc in _networkManager.ServerManager.Clients.Values)
-            {
-                foreach (PooledWriter writer in nc.PredictionStateWriters)
-                {
-                    /* Packet is sent as follows...
-                     * PacketId.
-                     * Length of packet.
-                     * Data. */
-                    ArraySegment<byte> segment = writer.GetArraySegment();
-                    writer.Position = 0;
-                    writer.WritePacketId(PacketId.StateUpdate);
-                    /* Send the full length of the writer excluding
-                     * the reserve count of the header. The header reserve
-                     * count will always be the same so that can be parsed
-                     * off immediately upon receiving. */
-                    int dataLength = (segment.Count - STATE_HEADER_RESERVE_COUNT);
-                    //Write length.
-                    writer.WriteInt32(dataLength, AutoPackType.Unpacked);
-                    tm.SendToClient((byte)Channel.Reliable, segment, nc, true);
-                }
-
-                nc.StorePredictionStateWriters();
-            }
-        }
-
         public struct StatePacket
         {
             public ArraySegment<byte> Data;
+            public uint ClientTick;
             public uint ServerTick;
             public bool IsValid => (Data.Array != null);
 
-            public StatePacket(ArraySegment<byte> data, uint serverTick)
+            public StatePacket(ArraySegment<byte> data, uint clientTick, uint serverTick)
             {
                 Data = data;
                 ServerTick = serverTick;
+                ClientTick = clientTick;
             }
 
             public void ResetState()
@@ -516,21 +516,35 @@ namespace FishNet.Managing.Predicting
             if (!_networkManager.IsClientStarted)
                 return;
             //No states.
-            if (!_reconcileState.IsValid)
+            if (_reconcileStates.Count == 0)
+                return;
+
+            uint estimatedLastRemoteTick = _networkManager.TimeManager.LastPacketTick.Value();
+            //NOTESSTART
+            /* Don't run a reconcile unless it's possible for ticks queued
+             * that tick to be run already. Otherwise you are not replaying inputs
+             * at all, just snapping to corrections. This means states which arrive late or out of order
+             * will be ignored since they're before the reconcile, which means important actions
+             * could have gone missed.
+             * 
+             * A system which synchronized all current states rather than what's only needed to correct
+             * the inputs would likely solve this. */
+            //NOTESEND
+            if (_reconcileStates.Peek().ClientTick >= (_networkManager.TimeManager.LocalTick - QueuedInputs - 2))
                 return;
 
             uint localTick = _networkManager.TimeManager.LocalTick;
+            StatePacket sp = _reconcileStates.Dequeue();
+            PooledReader reader = ReaderPool.Retrieve(sp.Data, _networkManager, Reader.DataSource.Server);
 
-            PooledReader reader = ReaderPool.Retrieve(_reconcileState.Data, _networkManager, Reader.DataSource.Server);
-
-            uint clientTick = reader.ReadTickUnpacked();
-            uint serverTick = _reconcileState.ServerTick;
+            uint clientTick = sp.ClientTick;
+            uint serverTick = sp.ServerTick;
 
             bool dropReconcile = false;
             double timePassed = _networkManager.TimeManager.TicksToTime(localTick - clientTick);
             /* If client has a massive ping or is suffering from a low frame rate
              * then limit the number of reconciles to prevent further performance loss. */
-            if (timePassed > 0.5d || _networkManager.TimeManager.LowFrameRate)
+            if (timePassed > 1.5d || _networkManager.TimeManager.LowFrameRate)
             {
                 /* Limit 3 drops a second. DropValue will be roughly the same
                  * as every 330ms. */
@@ -555,8 +569,14 @@ namespace FishNet.Managing.Predicting
 
             if (!dropReconcile)
             {
-                StateClientTick = clientTick;
-                StateServerTick = serverTick;
+                IsReconciling = true;
+
+                ClientStateTick = clientTick;
+                /* This is the tick which the reconcile is for.
+                 * Since reconciles are performed after replicate, if
+                 * the replicate was on tick 100 then this reconcile is the state
+                 * on tick 100, after the replicate is performed. */
+                ServerStateTick = serverTick;
 
                 //Have the reader get processed.
                 _networkManager.ClientManager.ParseReader(reader, Channel.Reliable);
@@ -565,12 +585,14 @@ namespace FishNet.Managing.Predicting
                 bool timeManagerPhysics = (tm.PhysicsMode == PhysicsMode.TimeManager);
                 float tickDelta = (float)tm.TickDelta;
 
-                OnPreReconcile?.Invoke(StateClientTick, StateServerTick);
+                OnPreReconcile?.Invoke(ClientStateTick, ServerStateTick);
 
                 if (timeManagerPhysics)
                 {
+                    OnPrePhysicsTransformSync?.Invoke(ClientStateTick, ServerStateTick);
                     Physics.SyncTransforms();
                     Physics2D.SyncTransforms();
+                    OnPostPhysicsTransformSync?.Invoke(ClientStateTick, ServerStateTick);
                 }
                 int replays = 0;
                 //Replays.
@@ -583,50 +605,141 @@ namespace FishNet.Managing.Predicting
                  * Replay up to localtick, excluding localtick. There will
                  * be no input for localtick since reconcile runs before
                  * OnTick. */
-                uint clientReplayTick = StateClientTick; //+ 1;
-                uint serverReplayTick = StateServerTick;// + 1;
-                while (clientReplayTick < localTick)
+                ClientReplayTick = ClientStateTick;
+                ServerReplayTick = ServerStateTick;
+                /* Only replay up to this tick excluding queuedInputs.
+                 * This will prevent the client from replaying into
+                 * it's authorative/owned inputs which have not run
+                 * yet.
+                 * 
+                 * An additional value is subtracted to prevent
+                 * client from running 1 local tick into the future
+                 * since the OnTick has not run yet. */
+                while (ClientReplayTick < (localTick - QueuedInputs - 1))
                 {
-                    OnPreReplicateReplay?.Invoke(clientReplayTick, serverReplayTick);
-                    OnReplicateReplay?.Invoke(clientReplayTick, serverReplayTick);
+                    OnPreReplicateReplay?.Invoke(ClientReplayTick, ServerReplayTick);
+                    OnReplicateReplay?.Invoke(ClientReplayTick, ServerReplayTick);
                     if (timeManagerPhysics)
                     {
-                        Physics2D.Simulate(tickDelta);
                         Physics.Simulate(tickDelta);
-                        Physics2D.SyncTransforms();
-                        Physics.SyncTransforms();
+                        Physics2D.Simulate(tickDelta);
                     }
-                    OnPostReplicateReplay?.Invoke(clientReplayTick, serverReplayTick);
+                    OnPostReplicateReplay?.Invoke(ClientReplayTick, ServerReplayTick);
                     replays++;
-                    clientReplayTick++;
-                    serverReplayTick++;
+                    ClientReplayTick++;
+                    ServerReplayTick++;
                 }
 
-                OnPostReconcile?.Invoke(StateClientTick, StateServerTick);
+                OnPostReconcile?.Invoke(ClientStateTick, ServerStateTick);
+
+                ClientStateTick = TimeManager.UNSET_TICK;
+                ServerStateTick = TimeManager.UNSET_TICK;
+                ClientReplayTick = TimeManager.UNSET_TICK;
+                ServerReplayTick = TimeManager.UNSET_TICK;
+                IsReconciling = false;
+            }
+            //Intentionally left blank.
+            else
+            {
             }
 
-            _reconcileState.ResetState();
+            sp.ResetState();
             ReaderPool.Store(reader);
         }
+        /// <summary>
+        /// Sends written states for clients.
+        /// </summary>
+        internal void SendStateUpdate()
+        {
+            TransportManager tm = _networkManager.TransportManager;
+            foreach (NetworkConnection nc in _networkManager.ServerManager.Clients.Values)
+            {
+                uint lastReplicateTick;
+                //If client has performed a replicate.
+                if (!nc.ReplicateTick.IsUnset)
+                {
+                    /* If it's been longer than queued inputs since
+                     * server has received a replicate then
+                     * use estimated value. Otherwise use LastRemoteTick. */
+                    if (nc.ReplicateTick.LocalTickDifference(_networkManager.TimeManager) > QueuedInputs)
+                        lastReplicateTick = nc.ReplicateTick.Value();
+                    else
+                        lastReplicateTick = nc.ReplicateTick.LastRemoteTick;
+                }
+                /* If not then use what is estimated to be the clients
+                 * current tick along with desired prediction queue count.
+                 * This should be just about the same as if the client used replicate,
+                 * but even if it's not it doesn't matter because the client
+                 * isn't replicating himself, just reconciling and replaying other objects. */
+                else
+                {
+                    lastReplicateTick = (nc.PacketTick.Value() + QueuedInputs);
+                }                
+
+                foreach (PooledWriter writer in nc.PredictionStateWriters)
+                {
+                    /* Packet is sent as follows...
+                     * PacketId.
+                     * LastReplicateTick of receiver.
+                     * Length of packet.
+                     * Data. */
+                    ArraySegment<byte> segment = writer.GetArraySegment();
+                    writer.Position = 0;
+                    writer.WritePacketId(PacketId.StateUpdate);
+                    writer.WriteTickUnpacked(lastReplicateTick);
+                    /* Send the full length of the writer excluding
+                     * the reserve count of the header. The header reserve
+                     * count will always be the same so that can be parsed
+                     * off immediately upon receiving. */
+                    int dataLength = (segment.Count - STATE_HEADER_RESERVE_COUNT);
+                    //Write length.
+                    writer.WriteInt32(dataLength, AutoPackType.Unpacked);
+                    //Channel is defaulted to unreliable.
+                    Channel channel = Channel.Unreliable;
+                    //If a single state exceeds MTU it must be sent on reliable. This is extremely unlikely.
+                    _networkManager.TransportManager.CheckSetReliableChannel(segment.Count, ref channel);
+                    tm.SendToClient((byte)channel, segment, nc, true);
+                }
+
+                nc.StorePredictionStateWriters();
+            }
+        }
+
 
         /// <summary>
         /// Parses a received state update.
         /// </summary>
         internal void ParseStateUpdate(PooledReader reader)
         {
-            if (_networkManager.IsServerStarted)
+            uint lastRemoteTick = _networkManager.TimeManager.LastPacketTick.LastRemoteTick;
+            //If server or state is older than another received state.
+            if (_networkManager.IsServerStarted || (lastRemoteTick < _lastOrderedReadReconcileTick))
             {
                 /* If the server is receiving a state update it can
                  * simply discard the data since the server will never
                  * need to reset states. This can occur on the clientHost
                  * side. */
+                reader.ReadTickUnpacked();
                 int length = reader.ReadInt32(AutoPackType.Unpacked);
                 reader.Skip(length);
             }
             else
             {
-                //Reset old reconcileState just incase it had values.
-                _reconcileState.ResetState();
+                _lastOrderedReadReconcileTick = lastRemoteTick;
+
+                /* There should never really be more than queuedInputs so set
+                 * a limit a little beyond to prevent reconciles from building up. 
+                 * This is more of a last result if something went terribly
+                 * wrong with the network. */
+                int maxAllowedStates = Mathf.Max(QueuedInputs * 4, 4);
+                while (_reconcileStates.Count > maxAllowedStates)
+                {
+                    StatePacket sp = _reconcileStates.Dequeue();
+                    sp.ResetState();
+                }
+
+                //LocalTick of this client the state is for.
+                uint clientTick = reader.ReadTickUnpacked();
                 //Length of packet.
                 int length = reader.ReadInt32(AutoPackType.Unpacked);
                 //Read data into array.
@@ -634,7 +747,7 @@ namespace FishNet.Managing.Predicting
                 reader.ReadBytes(ref arr, length);
                 //Make segment and store into states.
                 ArraySegment<byte> segment = new ArraySegment<byte>(arr, 0, length);
-                _reconcileState = new StatePacket(segment, _networkManager.TimeManager.LastPacketTick);
+                _reconcileStates.Enqueue(new StatePacket(segment, clientTick, lastRemoteTick));
             }
         }
 

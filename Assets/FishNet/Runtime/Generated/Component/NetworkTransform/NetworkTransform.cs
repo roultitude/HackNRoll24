@@ -3,6 +3,7 @@
 #endif
 using FishNet.Connection;
 using FishNet.Documenting;
+using FishNet.Managing;
 using FishNet.Managing.Logging;
 using FishNet.Managing.Server;
 using FishNet.Object;
@@ -13,6 +14,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
+using UnityEngine.Scripting;
 using UnityEngine.Serialization;
 
 namespace FishNet.Component.Transforming
@@ -142,6 +144,7 @@ namespace FishNet.Component.Transforming
             public RateData Rates = new RateData();
             public TransformData Transforms = new TransformData();
 
+            [Preserve]
             public GoalData() { }
 
             public void ResetState()
@@ -186,6 +189,7 @@ namespace FishNet.Component.Transforming
             /// </summary>
             internal float TimeRemaining;
 
+            [Preserve]
             public RateData() { }
 
 
@@ -270,6 +274,8 @@ namespace FishNet.Component.Transforming
             /// NetworkBehaviour which is the parent of this object for Tick.
             /// </summary>
             public NetworkBehaviour ParentBehaviour;
+
+            [Preserve]
             public TransformData() { }
 
             internal void Update(TransformData copy)
@@ -420,7 +426,6 @@ namespace FishNet.Component.Transforming
         /// True to use Network Level of Detail when the feature is enabled.
         /// </summary>
         [Tooltip("True to use Network Level of Detail when the feature is enabled.")]
-        [FormerlySerializedAs("_useNetworkLod")]//Remove on 2024/01/01
         [SerializeField]
         private bool _enableNetworkLod = true;
         /// <summary>
@@ -2225,11 +2230,11 @@ namespace FishNet.Component.Transforming
                 return;
 
             //Not new data.
-            uint lastPacketTick = base.TimeManager.LastPacketTick;
+            uint lastPacketTick = base.TimeManager.LastPacketTick.LastRemoteTick;
             if (lastPacketTick <= _lastObserversRpcTick)
                 return;
-            _lastObserversRpcTick = lastPacketTick;
 
+            _lastObserversRpcTick = lastPacketTick;
             DataReceived(data, channel, false);
         }
 
@@ -2249,7 +2254,7 @@ namespace FishNet.Component.Transforming
             }
 
             //Not new data.
-            uint lastPacketTick = base.TimeManager.LastPacketTick;
+            uint lastPacketTick = base.TimeManager.LastPacketTick.LastRemoteTick;
             if (lastPacketTick <= _lastServerRpcTick)
                 return;
             _lastServerRpcTick = lastPacketTick;
@@ -2419,7 +2424,7 @@ namespace FishNet.Component.Transforming
         private void UpdateTransformData(ArraySegment<byte> packetData, TransformData prevTransformData, TransformData nextTransformData, ref ChangedFull changedFull, out byte lodIndex)
         {
             DeserializePacket(packetData, prevTransformData, nextTransformData, ref changedFull, out lodIndex);
-            nextTransformData.Tick = base.TimeManager.LastPacketTick;
+            nextTransformData.Tick = base.TimeManager.LastPacketTick.LastRemoteTick;
         }
 
         /// <summary>

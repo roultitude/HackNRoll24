@@ -11,22 +11,31 @@ using UnityEngine;
 
 namespace FishNet.PredictionV2
 {
+    /* THIS CLASS IS CURRENTLY USED FOR TESTING AND IS NOT CONSIDERED
+     * AN EXAMPLE TO FOLLOW. */
+    /* THIS CLASS IS CURRENTLY USED FOR TESTING AND IS NOT CONSIDERED
+     * AN EXAMPLE TO FOLLOW. */
+    /* THIS CLASS IS CURRENTLY USED FOR TESTING AND IS NOT CONSIDERED
+     * AN EXAMPLE TO FOLLOW. */
+    /* THIS CLASS IS CURRENTLY USED FOR TESTING AND IS NOT CONSIDERED
+     * AN EXAMPLE TO FOLLOW. */
 
     public class RigidbodyPredictionV2 : NetworkBehaviour
     {
 #if PREDICTION_V2
-
 
         public struct MoveData : IReplicateData
         {
             public bool Jump;
             public float Horizontal;
             public float Vertical;
-            public MoveData(bool jump, float horizontal, float vertical)
-            {
+            public Vector3 OtherImpulseForces;
+            public MoveData(bool jump, float horizontal, float vertical, Vector3 otherImpulseForces)
+            { 
                 Jump = jump;
                 Horizontal = horizontal;
                 Vertical = vertical;
+                OtherImpulseForces = otherImpulseForces;
                 _tick = 0;
             }
 
@@ -57,23 +66,18 @@ namespace FishNet.PredictionV2
             public void SetTick(uint value) => _tick = value;
         }
 
-        [SerializeField]
-        private float _jumpForce = 15f;
+        //[SerializeField]
+        //private float _jumpForce = 15f;
         [SerializeField]
         private float _moveRate = 15f;
 
-        private Rigidbody _rigidbody;
+        public Rigidbody Rigidbody { get; private set; }
         private bool _jump;
-        private bool _canControl => (base.IsOwner || (!base.Owner.IsValid && base.IsServerStarted));
 
         private void Update()
         {
-            if (_canControl)
+            if (base.IsOwner)
             {
-                //Remove clientHost ownership for testing.
-                if (base.IsOwner && base.IsServerStarted)
-                    base.RemoveOwnership();
-
                 if (Input.GetKeyDown(KeyCode.Space))
                     _jump = true;
             }
@@ -81,8 +85,7 @@ namespace FishNet.PredictionV2
 
         public override void OnStartNetwork()
         {
-
-            _rigidbody = GetComponent<Rigidbody>();
+            Rigidbody = GetComponent<Rigidbody>();
             base.TimeManager.OnTick += TimeManager_OnTick;
             base.TimeManager.OnPostTick += TimeManager_OnPostTick;
         }
@@ -102,77 +105,105 @@ namespace FishNet.PredictionV2
 
         private MoveData BuildMoveData()
         {
-
-            if (!_canControl)
+            if (!IsOwner && Owner.IsValid)
                 return default;
 
             float horizontal = Input.GetAxisRaw("Horizontal");
             float vertical = Input.GetAxisRaw("Vertical");
-            MoveData md = new MoveData(_jump, horizontal, vertical);
+            //MoveData md = new MoveData(_jump, horizontal, vertical, (SpringForces + RocketForces));
+            MoveData md = new MoveData(_jump, horizontal, vertical, Vector3.zero);
+
+            //SpringForces = Vector3.zero;
+            //RocketForces = Vector3.zero;
+
             _jump = false;
 
             return md;
         }
 
-        private MoveData _lastData;
+        public uint LastMdTick;
 
-        [ReplicateV2]
+        [Replicate]
         private void Move(MoveData md, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
         {
-
-            //if (!base.IsOwner)
+            LastMdTick = md.GetTick();
+            //if (base.IsOwner)
+            //    Debug.Log(PredictionManager.ClientReplayTick + " > " + md.GetTick());
+            //if (state == ReplicateState.Future)
             //{
-            //    if (state == ReplicateState.ReplayedPredicted || state == ReplicateState.Predicted)
-            //    {
-            //        uint tick = md.GetTick();
-            //        md = _lastData;
-            //        md.SetTick(tick);
-            //    }
-            //    else
-            //    {
-            //        _lastData = md;
-            //    }
-            //}
-            //if (base.IsOwner && state != ReplicateState.UserCreated && state != ReplicateState.ReplayedUserCreated)
-            //  Debug.LogError($"SDFSD  " + md.GetTick());
-            /* If predicted input via replay then slow down velocity.
-             * This prevents potential overshooting if the object were to change
-             * direction. If your rigidbody has a substantial amount of drag or is
-             * likely to continue in the same direction this likely is not needed.
-             * 
-             * This is not a requirement by any means but rather a modification for
-             * this demo scene/game type. */
-            //if (state == ReplicateState.ReplayedPredicted || state == ReplicateState.Predicted)
-            //    _rigidbody.velocity *= 0.75f;
+            //    /* Reduce velocity slightly. This will be slightly less accurate if
+            //     * the object continues to move in the same direction but can drastically
+            //     * reduce jarring visuals if the object changes path rather than predicted(future)
+            //     * forward. */
+            //    _rigidbody.velocity *= 0.65f;
+            //    _rigidbody.angularVelocity *= 0.65f;
+            //    return;
+            //}            
+
+            //Vector3 forces = new Vector3(md.Horizontal, 0f, md.Vertical) * _moveRate;
+            //Rigidbody.AddForce(forces);
+
+            //if (md.Jump)
+            //    Rigidbody.AddForce(new Vector3(0f, _jumpForce, 0f), ForceMode.Impulse);
+            ////Add gravity to make the object fall faster.
+            //Rigidbody.AddForce(Physics.gravity * 3f);
 
             Vector3 forces = new Vector3(md.Horizontal, 0f, md.Vertical) * _moveRate;
-            _rigidbody.AddForce(forces);
+            //PRB.AddForce(forces);
+            forces += Physics.gravity * 3f;
+            //if (md.Jump)
+            //    PRB.AddForce(new Vector3(0f, _jumpForce, 0f), ForceMode.Impulse);
+            ////Add gravity to make the object fall faster.
+            //PRB.AddForce(forces);
 
-            if (md.Jump)
-                _rigidbody.AddForce(new Vector3(0f, _jumpForce, 0f), ForceMode.Impulse);
-            //Add gravity to make the object fall faster.
-            _rigidbody.AddForce(Physics.gravity * 3f);
+
+            //if (IsOwner)
+            //{
+            //    if (state.IsReplayed())
+            //        Debug.Log($"{md.GetTick()} -> {transform.position.x} -> {Rigidbody.velocity.x}");
+            //    else
+            //        Debug.LogWarning($"{md.GetTick()} -> {transform.position.x} -> {Rigidbody.velocity.x}");
+            //}
+
+            //if ((!base.IsServerStarted && base.IsOwner) || (base.IsServerStarted && !base.IsOwner))
+            //    Debug.LogWarning($"Frame {Time.frameCount}. State {state}, Horizontal {md.Horizontal}. MdTick {md.GetTick()}, PosX {transform.position.x.ToString("0.##")}. VelX {Rigidbody.velocity.x.ToString("0.###")}.");
         }
 
-        private void TimeManager_OnPostTick()
+        private void SendReconcile()
         {
             /* The base.IsServer check is not required but does save a little
             * performance by not building the reconcileData if not server. */
             if (IsServerStarted)
             {
-                ReconcileData rd = new ReconcileData(transform.position, transform.rotation, _rigidbody.velocity, _rigidbody.angularVelocity);
+                ReconcileData rd = new ReconcileData(transform.position, transform.rotation, Rigidbody.velocity, Rigidbody.angularVelocity);
+                //if (!base.IsOwner)
+                //    Debug.LogError($"Frame {Time.frameCount}. Reconcile, MdTick {LastMdTick}, PosX {transform.position.x.ToString("0.##")}. VelX {Rigidbody.velocity.x.ToString("0.###")}.");
                 Reconciliation(rd);
             }
         }
 
-        [ReconcileV2]
+        private void TimeManager_OnPostTick()
+        {
+            SendReconcile();
+        }
+
+        [Reconcile]
         private void Reconciliation(ReconcileData rd, Channel channel = Channel.Unreliable)
         {
             transform.position = rd.Position;
             transform.rotation = rd.Rotation;
-            _rigidbody.velocity = rd.Velocity;
-            _rigidbody.angularVelocity = rd.AngularVelocity;
+            Rigidbody.velocity = rd.Velocity;
+            Rigidbody.angularVelocity = rd.AngularVelocity;
+
+            //if (PrintForClient())
+            //{ 
+            //    Debug.LogError($"Frame {Time.frameCount}. Reconcile, MdTick {rd.GetTick()}, PosX {transform.position.x.ToString("0.##")}. VelX {Rigidbody.velocity.x.ToString("0.###")}. RdPosX " +
+            //        $"{rd.Position.x.ToString("0.##")}. RdVelX {Rigidbody.velocity.x.ToString("0.###")}");
+            //}
+
         }
+
+        private bool PrintForClient() => ((!base.IsServerStarted && base.IsOwner) || (base.IsServerStarted && !base.IsOwner));
 
 #endif
     }

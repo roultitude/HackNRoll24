@@ -3135,6 +3135,7 @@ MonoBehaviour:
   successAudio: {fileID: 8300000, guid: 017bc7c2c8d737a47a94ed317b0b04bf, type: 3}
   activeTimerColor: {r: 0.9803922, g: 0.90196085, b: 0.14901961, a: 1}
   inactiveTimerColor: {r: 0.39607847, g: 0.16470589, b: 0.48627454, a: 1}
+  roundStarted: 0
   roundsLeft: 0
 --- !u!4 &1425134243
 Transform:
@@ -3931,6 +3932,53 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1632141945}
   m_CullTransparentMesh: 1
+--- !u!1 &1654028006
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1654028008}
+  - component: {fileID: 1654028007}
+  m_Layer: 0
+  m_Name: GameNetworkManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1654028007
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1654028006}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cf98d64b6cd9133419c779f4465b284d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _spawnRegion: {x: 1, y: 1, z: 1}
+  _playerPrefab: {fileID: 0}
+  _deathDummy: {fileID: 0}
+--- !u!4 &1654028008
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1654028006}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1673985588
 GameObject:
   m_ObjectHideFlags: 0
@@ -5117,3 +5165,4 @@ SceneRoots:
   - {fileID: 1015771500}
   - {fileID: 1425134243}
   - {fileID: 389366152}
+  - {fileID: 1654028008}

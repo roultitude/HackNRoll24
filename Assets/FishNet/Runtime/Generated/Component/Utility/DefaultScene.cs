@@ -24,7 +24,6 @@ namespace FishNet.Component.Scenes
 
         #region Serialized.
         [Tooltip("True to load the online scene as global, false to load it as connection.")]
-        [FormerlySerializedAs("_useGlobalScenes")]//Remove on 2024/01/01
         [SerializeField]
         private bool _enableGlobalScenes = true;
         /// <summary>
@@ -98,8 +97,7 @@ namespace FishNet.Component.Scenes
             _networkManager = GetComponentInParent<NetworkManager>();
             if (_networkManager == null)
             {
-
-                NetworkManager.StaticLogError($"NetworkManager not found on {gameObject.name} or any parent objects. DefaultScene will not work.");
+                NetworkManagerExtensions.LogError($"NetworkManager not found on {gameObject.name} or any parent objects. DefaultScene will not work.");
                 return;
             }
             //A NetworkManager won't be initialized if it's being destroyed.
@@ -108,7 +106,7 @@ namespace FishNet.Component.Scenes
             if (_onlineScene == string.Empty || _offlineScene == string.Empty)
             {
 
-                NetworkManager.StaticLogWarning("Online or Offline scene is not specified. Default scenes will not load.");
+                NetworkManagerExtensions.LogWarning("Online or Offline scene is not specified. Default scenes will not load.");
                 return;
             }
 

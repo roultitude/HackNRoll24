@@ -38,10 +38,6 @@ namespace FishNet.Object
         /// </summary>
         internal bool AllowPredictedDespawning => (PredictedSpawn == null) ? false : PredictedSpawn.GetAllowDespawning();
         /// <summary>
-        /// True to allow clients to predicted set syncTypes prior to spawning the item. Set values will be applied on the server and sent to other clients.
-        /// </summary>
-        internal bool AllowPredictedSyncTypes => (PredictedSpawn == null) ? false : PredictedSpawn.GetAllowSyncTypes();
-        /// <summary>
         /// True if this object has been initialized on the client side.
         /// This is set true right before client start callbacks and after stop callbacks.
         /// </summary>
@@ -84,7 +80,7 @@ namespace FishNet.Object
         /// </summary>
         public bool IsHostStarted => (IsClientStarted && IsServerStarted);
         /// <summary>
-        /// True if this object hsa been initialized on the server and client side.
+        /// True if this object has been initialized on the server and client side.
         /// </summary>
         public bool IsHostInitialized => (IsClientInitialized && IsServerInitialized);
         /// <summary>
@@ -211,11 +207,7 @@ namespace FishNet.Object
                 if (error)
                 {
                     string message = $"ComponentIndex of {componentIndex} is out of bounds on {gameObject.name} [id {ObjectId}]. This may occur if you have modified your gameObject/prefab without saving it, or the scene.";
-                    if (NetworkManager == null)
-                        NetworkManager.StaticLogError(message);
-                    else
-                        NetworkManager.LogError(message);
-
+                    NetworkManager.LogError(message);
                 }
             }
 

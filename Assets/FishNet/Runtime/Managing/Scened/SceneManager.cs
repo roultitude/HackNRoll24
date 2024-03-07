@@ -346,6 +346,7 @@ namespace FishNet.Managing.Scened
                     sld.Params = _globalSceneLoadData.Params;
                     sld.Options = _globalSceneLoadData.Options;
                     sld.ReplaceScenes = _globalSceneLoadData.ReplaceScenes;
+                    sld.PreferredActiveScene = _globalSceneLoadData.PreferredActiveScene;
 
                     LoadQueueData qd = new LoadQueueData(SceneScopeType.Global, Array.Empty<NetworkConnection>(), sld, _globalScenes, false);
                     //Send message to load the networked scenes.
@@ -726,6 +727,7 @@ namespace FishNet.Managing.Scened
         /// <param name="sceneLoadData">Data about which scenes to load.</param>
         public void LoadConnectionScenes(NetworkConnection conn, SceneLoadData sceneLoadData)
         {
+            //This cannot use cache because the array will persist for many frames after this method completion.
             LoadConnectionScenes(new NetworkConnection[] { conn }, sceneLoadData);
         }
         /// <summary>
@@ -1208,7 +1210,7 @@ namespace FishNet.Managing.Scened
                 void SetActiveScene_Local()
                 {
                     bool byUser;
-                    Scene preferredActiveScene = GetUserPreferredActiveScene(sceneLoadData.PreferredActiveScene, out byUser);
+                    Scene preferredActiveScene = GetUserPreferredActiveScene(sceneLoadData.PreferredActiveScene, asServer, out byUser);
                     //If preferred still is not set then try to figure it out.
                     if (!preferredActiveScene.IsValid())
                     {
@@ -1270,16 +1272,17 @@ namespace FishNet.Managing.Scened
                     if (data.ScopeType == SceneScopeType.Global)
                     {
                         NetworkConnection[] conns = _serverManager.Clients.Values.ToArray();
-                        AddPendingLoad(conns);
+                        AddPendingLoad(conns, conns.Length);
                         _serverManager.Broadcast(msg, true);
                     }
                     //If connections scope then only send to connections.
                     else if (data.ScopeType == SceneScopeType.Connections)
                     {
-                        AddPendingLoad(data.Connections);
+                        AddPendingLoad(data.Connections, data.Connections.Length);
                         for (int i = 0; i < data.Connections.Length; i++)
                         {
-                            if (data.Connections[i].Authenticated)
+                            NetworkConnection c = data.Connections[i];
+                            if (c.IsValid() && c.IsAuthenticated)
                                 data.Connections[i].Broadcast(msg, true);
                         }
                     }
@@ -1366,6 +1369,7 @@ namespace FishNet.Managing.Scened
         /// <param name="sceneUnloadData">Data about which scenes to unload.</param>
         public void UnloadConnectionScenes(NetworkConnection connection, SceneUnloadData sceneUnloadData)
         {
+            //This cannot use cache because the array will persist for many frames after this method completion.
             UnloadConnectionScenes(new NetworkConnection[] { connection }, sceneUnloadData);
         }
         /// <summary>
@@ -1519,7 +1523,7 @@ namespace FishNet.Managing.Scened
             yield return null;
 
             bool byUser;
-            Scene preferredActiveScene = GetUserPreferredActiveScene(sceneUnloadData.PreferredActiveScene, out byUser);
+            Scene preferredActiveScene = GetUserPreferredActiveScene(sceneUnloadData.PreferredActiveScene, asServer, out byUser);
             SetActiveScene(preferredActiveScene, byUser);
 
             /* If running as server then make sure server
@@ -1544,7 +1548,9 @@ namespace FishNet.Managing.Scened
                     {
                         for (int i = 0; i < data.Connections.Length; i++)
                         {
-                            if (data.Connections[i] != null)
+                            NetworkConnection conn = data.Connections[i];
+                            //Would not be null from internals, but users might incorrectly pass null in.
+                            if (conn.IsValid())
                                 data.Connections[i].Broadcast(msg, true);
                         }
                     }
@@ -1692,6 +1698,9 @@ namespace FishNet.Managing.Scened
         /// <param name="scene">Scene to add the connection to.</param>
         public void AddConnectionToScene(NetworkConnection conn, Scene scene)
         {
+            if (!conn.IsValid())
+                return;
+
             HashSet<NetworkConnection> hs;
             //Scene doesn't have any connections yet.
             bool inSceneConnections = SceneConnections.TryGetValueIL2CPP(scene, out hs);
@@ -1741,6 +1750,9 @@ namespace FishNet.Managing.Scened
                 //Remove every connection from the scene.
                 foreach (NetworkConnection c in conns)
                 {
+                    if (!c.IsValid())
+                        continue;
+
                     bool removed = hs.Remove(c);
                     if (removed)
                     {
@@ -1789,6 +1801,9 @@ namespace FishNet.Managing.Scened
             //Remove every connection from the scene.
             foreach (NetworkConnection c in conns)
             {
+                if (!c.IsValid())
+                    continue;
+
                 bool removed = hs.Remove(c);
                 if (removed)
                 {
@@ -1983,10 +1998,7 @@ namespace FishNet.Managing.Scened
                         if (warnIfDuplicates)
                         {
                             string msg = $"Scene name {s.name} is loaded multiple times. The first scene found will be returned. If you wish to unload multiple instances of a scene with the same name create {nameof(SceneLookupData)} using scene handles instead of name.";
-                            if (nm == null)
-                                NetworkManager.StaticLogWarning(msg);
-                            else
-                                nm.LogWarning(msg);
+                            nm.LogWarning(msg);
                             //No need to spam the message, break on first duplicate.
                             break;
                         }
@@ -2126,12 +2138,18 @@ namespace FishNet.Managing.Scened
         /// </summary>
         private void AddPendingLoad(NetworkConnection conn)
         {
-            AddPendingLoad(new NetworkConnection[] { conn });
+            NetworkConnection[] conns = CollectionCaches<NetworkConnection>.RetrieveArray();
+            if (conns.Length == 0)
+                conns = new NetworkConnection[1];
+            conns[0] = conn;
+
+            AddPendingLoad(conns, 1);
+            CollectionCaches<NetworkConnection>.Store(conns, 1);
         }
         /// <summary>
         /// Adds a pending load for a connection.
         /// </summary>
-        private void AddPendingLoad(NetworkConnection[] conns)
+        private void AddPendingLoad(NetworkConnection[] conns, int count)
         {
             foreach (NetworkConnection c in conns)
             {
@@ -2139,7 +2157,7 @@ namespace FishNet.Managing.Scened
                  * but perhaps disconnect happened as scene was loading on server
                 * therefor it cannot be sent to the client. 
                 * Also only authenticated clients can load scenes. */
-                if (!c.IsActive || !c.Authenticated)
+                if (!c.IsActive || !c.IsAuthenticated)
                     continue;
 
                 if (_pendingClientSceneChanges.TryGetValue(c, out int result))
@@ -2229,9 +2247,11 @@ namespace FishNet.Managing.Scened
         /// <summary>
         /// Returns a preferred active scene to use.
         /// </summary>
-        private Scene GetUserPreferredActiveScene(SceneLookupData sld, out bool byUser)
+        private Scene GetUserPreferredActiveScene(PreferredScene ps, bool asServer, out bool byUser)
         {
             byUser = false;
+            SceneLookupData sld = (asServer) ? ps.Server : ps.Client;
+            //Not specified.
             if (sld == null)
                 return default;
 

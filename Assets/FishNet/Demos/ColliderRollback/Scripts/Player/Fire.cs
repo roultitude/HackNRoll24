@@ -83,7 +83,7 @@ namespace FishNet.Example.ColliderRollbacks
 
             Vector3 direction = _aim.PlayerCamera.transform.forward;
             Vector3 start = _aim.PlayerCamera.transform.position;
-            ServerFire(base.TimeManager.GetPreciseTick(base.TimeManager.LastPacketTick), start, direction);
+            ServerFire(base.TimeManager.GetPreciseTick(base.TimeManager.LastPacketTick.Value()), start, direction);
         }
 
         /// <summary>
@@ -140,7 +140,7 @@ namespace FishNet.Example.ColliderRollbacks
                 //If moving enemy was hit.
                 if (hit.transform.root.GetComponent<RollbackVisualizer>() != null)
                 {
-                    PreciseTick pt = base.TimeManager.GetPreciseTick(base.TimeManager.LastPacketTick);
+                    PreciseTick pt = base.TimeManager.GetPreciseTick(base.TimeManager.LastPacketTick.Value());
                     //Send the frame, start, and direction.
                     /* The remaining arguments are used to calculate
                      * the accuracy between where client hit and where

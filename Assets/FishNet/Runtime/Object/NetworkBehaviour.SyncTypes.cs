@@ -1,6 +1,7 @@
 ﻿using FishNet.CodeGenerating;
 using FishNet.Connection;
 using FishNet.Documenting;
+using FishNet.Managing;
 using FishNet.Managing.Transporting;
 using FishNet.Object.Delegating;
 using FishNet.Object.Synchronizing;
@@ -68,7 +69,7 @@ namespace FishNet.Object
         /// <summary>
         /// True if at least one syncType is dirty.
         /// </summary>
-        private bool _syncTypeDirty;
+        internal bool SyncTypeDirty;
         /// <summary>
         /// All ReadPermission values.
         /// </summary>
@@ -83,7 +84,7 @@ namespace FishNet.Object
         internal void RegisterSyncType(SyncBase sb, uint index)
         {
             if (!_syncTypes.TryAdd(index, sb))
-                FishNet.Managing.NetworkManager.StaticLogError($"SyncType key {index} has already been added for {GetType().FullName} on {gameObject.name}");
+                NetworkManager.LogError($"SyncType key {index} has already been added for {GetType().FullName} on {gameObject.name}");
         }
         /// <summary>
         /// Sets a SyncVar as dirty.
@@ -98,12 +99,12 @@ namespace FishNet.Object
              * This can happen even if a client is going to see
              * this object because the server side initializes
              * before observers are built. */
-            if (_networkObjectCache.Observers.Count == 0)
+            if (_networkObjectCache.Observers.Count == 0 && !_networkObjectCache.PredictedSpawner.IsValid)
                 return false;
 
-            if (!_syncTypeDirty)
+            if (!SyncTypeDirty)
                 _networkObjectCache.NetworkManager.ServerManager.Objects.SetDirtySyncType(this);
-            _syncTypeDirty = true;
+            SyncTypeDirty = true;
 
             return true;
         }
@@ -174,7 +175,7 @@ namespace FishNet.Object
         /// Writers dirty SyncTypes if their write tick has been met.
         /// </summary>
         /// <returns>True if there are no pending dirty sync types.</returns>
-        internal bool WriteDirtySyncTypes(bool ignoreInterval = false)
+        internal bool WriteDirtySyncTypes(bool ignoreInterval = false, bool forceReliable = false, bool writeOnlyOwner = false)
         {
             /* Can occur when a synctype is queued after
              * the object is marked for destruction. This should not
@@ -188,27 +189,32 @@ namespace FishNet.Object
 
             /* If there is nothing dirty then return true, indicating no more
              * pending dirty checks. */
-            if (!_syncTypeDirty || _syncTypes.Count == 0)
+            if ((!writeOnlyOwner && !SyncTypeDirty) || _syncTypes.Count == 0)
                 return true;
+
+            //Number of syncTypes which are/were dirty.
+            int dirtyCount = 0;
+            //Number of syncTypes which were written.
+            int writtenCount = 0;
 
             /* True if writers have been reset for this check.
              * For perf writers are only reset when data is to be written. */
             bool writersReset = false;
             uint tick = _networkObjectCache.NetworkManager.TimeManager.Tick;
 
-            //True if a syncvar is found to still be dirty.
-            bool dirtyFound = false;
-            //True if data has been written and is ready to send.
-            bool dataWritten = false;
-
             foreach (SyncBase sb in _syncTypes.Values)
             {
-                if (!sb.IsDirty)
+                bool isForceOwnerWrite = (writeOnlyOwner && sb.Settings.ReadPermission == ReadPermission.OwnerOnly);
+                /* If not forceOwnerOnly and is not OwnerOnly, or if not
+                 * Dirty then continue. */
+                //If forceOnlyOwner and is owner, or is dirty then proceed.
+                if (!isForceOwnerWrite && !sb.IsDirty)
                     continue;
 
-                dirtyFound = true;
+                dirtyCount++;
                 if (ignoreInterval || sb.SyncTimeMet(tick))
                 {
+                    writtenCount++;
                     //If writers still need to be reset.
                     if (!writersReset)
                     {
@@ -218,6 +224,8 @@ namespace FishNet.Object
                             _syncTypeWriters[i].Reset();
                     }
 
+                    if (forceReliable)
+                        sb.SetCurrentChannel(Channel.Reliable);
                     //Find channel.
                     byte channel = (byte)sb.Channel;
                     sb.ResetDirty();
@@ -225,7 +233,6 @@ namespace FishNet.Object
                     if (sb.Settings.ReadPermission == ReadPermission.OwnerOnly && !_networkObjectCache.Owner.IsValid)
                         continue;
 
-                    dataWritten = true;
                     //Find PooledWriter to use.
                     PooledWriter writer = null;
                     for (int i = 0; i < _syncTypeWriters.Length; i++)
@@ -243,20 +250,27 @@ namespace FishNet.Object
                     }
 
                     if (writer == null)
+                    {
                         NetworkManager.LogError($"Writer couldn't be found for permissions {sb.Settings.ReadPermission} on channel {channel}.");
+                    }
                     else
-                        sb.WriteDelta(writer);
+                    {
+                        if (isForceOwnerWrite)
+                            sb.WriteFull(writer);
+                        else
+                            sb.WriteDelta(writer);
+                    }
                 }
             }
 
             //If no dirty were found.
-            if (!dirtyFound)
+            if (dirtyCount == 0)
             {
-                _syncTypeDirty = false;
+                SyncTypeDirty = false;
                 return true;
             }
             //At least one sync type was dirty.
-            else if (dataWritten)
+            else if (writtenCount > 0)
             {
                 for (int i = 0; i < _syncTypeWriters.Length; i++)
                 {
@@ -295,11 +309,19 @@ namespace FishNet.Object
                         }
                     }
                 }
-            }
 
-            /* Fall through. If here then sync types are still pending
-             * being written or were just written this frame. */
-            return false;
+                /* If the number written is the same as those which were dirty
+                 * then no dirty rename. Return true if no dirty remain. */
+                bool wroteAllDirty = (writtenCount == dirtyCount);
+                if (wroteAllDirty)
+                    SyncTypeDirty = false;
+                return wroteAllDirty;
+            }
+            //If here then at least one was dirty but none were written. This means some still need to write.
+            else
+            {
+                return false;
+            }
         }
 
 
@@ -311,7 +333,7 @@ namespace FishNet.Object
             foreach (SyncBase item in _syncTypes.Values)
                 item.ResetState();
 
-            _syncTypeDirty = false;
+            SyncTypeDirty = false;
         }
 
         /// <summary>
@@ -322,7 +344,7 @@ namespace FishNet.Object
         internal virtual void ResetSyncVarFields() { }
 
         /// <summary>
-        /// Writers syncVars for a spawn message.
+        /// Writes syncVars for a spawn message.
         /// </summary>
         /// <param name="conn">Connection SyncTypes are being written for.</param>
         internal void WriteSyncTypesForSpawn(PooledWriter writer, NetworkConnection conn)
