@@ -12,6 +12,10 @@ public class TouchControls : MonoBehaviour
     public bool isControlsActive = false;
     public static TouchControls Instance;
     public Orb currentOrb;
+
+    [SerializeField]
+    RectTransform gameCanvas;
+
     [SerializeField]
     Orb phantomOrb;
     public RectTransform phantomOrbRect;
@@ -44,16 +48,15 @@ public class TouchControls : MonoBehaviour
         
         clampedMousePos.x = Mathf.Clamp(
             clampedMousePos.x,
-            Board.Instance.rect.position.x - Board.Instance.tileRadius * Board.Instance.boardWidth,
-            Board.Instance.rect.position.x + Board.Instance.tileRadius * Board.Instance.boardWidth);
+            Board.Instance.rect.position.x - Board.Instance.tileRadius * Board.Instance.boardWidth * gameCanvas.localScale.x,
+            Board.Instance.rect.position.x + Board.Instance.tileRadius * Board.Instance.boardWidth * gameCanvas.localScale.x);
         clampedMousePos.y = Mathf.Clamp(
             clampedMousePos.y, 
-            Board.Instance.rect.position.y - Board.Instance.tileRadius * Board.Instance.boardHeight,
-            Board.Instance.rect.position.y + Board.Instance.tileRadius * Board.Instance.boardHeight
+            Board.Instance.rect.position.y - Board.Instance.tileRadius * Board.Instance.boardHeight * gameCanvas.localScale.y,
+            Board.Instance.rect.position.y + Board.Instance.tileRadius * Board.Instance.boardHeight * gameCanvas.localScale.y
             );
         bool isMouseOutOfBoard = clampedMousePos.x != Input.mousePosition.x || clampedMousePos.y != Input.mousePosition.y;
         PointerEventData ped = new PointerEventData(null);
-        Debug.Log(Board.Instance.rect.position + " " + Board.Instance.tileRadius * Board.Instance.boardWidth);
         ped.position = clampedMousePos;
 
         List<RaycastResult> results = new List<RaycastResult>();

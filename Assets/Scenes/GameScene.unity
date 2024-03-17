@@ -2346,6 +2346,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   isControlsActive: 1
   currentOrb: {fileID: 0}
+  gameCanvas: {fileID: 1863979004}
   phantomOrb: {fileID: 1787601374}
   phantomOrbRect: {fileID: 1787601373}
   holdOffset: {x: 0, y: 0}
@@ -3942,6 +3943,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1654028008}
   - component: {fileID: 1654028007}
+  - component: {fileID: 1654028009}
   m_Layer: 0
   m_Name: GameNetworkManager
   m_TagString: Untagged
@@ -3961,9 +3963,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cf98d64b6cd9133419c779f4465b284d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _spawnRegion: {x: 1, y: 1, z: 1}
+  _componentIndexCache: 0
+  _addedNetworkObject: {fileID: 1654028009}
+  _networkObjectCache: {fileID: 1654028009}
   _playerPrefab: {fileID: 0}
-  _deathDummy: {fileID: 0}
 --- !u!4 &1654028008
 Transform:
   m_ObjectHideFlags: 0
@@ -3979,6 +3982,40 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1654028009
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1654028006}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  <IsNested>k__BackingField: 0
+  <ComponentIndex>k__BackingField: 0
+  <PredictedSpawn>k__BackingField: {fileID: 0}
+  _networkBehaviours:
+  - {fileID: 1654028007}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
+  <NestedRootNetworkBehaviours>k__BackingField: []
+  SerializedTransformProperties:
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+    LocalScale: {x: 1, y: 1, z: 1}
+  _isNetworked: 1
+  _isSpawnable: 1
+  _isGlobal: 0
+  _initializeOrder: 0
+  _defaultDespawnType: 0
+  NetworkObserver: {fileID: 0}
+  <PrefabId>k__BackingField: 0
+  <SpawnableCollectionId>k__BackingField: 0
+  _scenePathHash: 2550129400
+  <SceneId>k__BackingField: 10952722377128794167
+  <AssetPathHash>k__BackingField: 0
 --- !u!1 &1673985588
 GameObject:
   m_ObjectHideFlags: 0

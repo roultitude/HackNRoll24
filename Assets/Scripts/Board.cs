@@ -49,7 +49,13 @@ public class Board : MonoBehaviour
             Destroy(gameObject);
         }
         rect = GetComponent<RectTransform>();
+    }
+
+    private void Start() //after init
+    {
+        Random.InitState(GameNetworkManager.Instance.rngSeed.Value);
         InitializeBoard();
+        SpawnOrbs();
     }
 
     private void InitializeBoard()
@@ -72,12 +78,16 @@ public class Board : MonoBehaviour
             if(boardWidth%2 == 0) tileSpriteCounter = (tileSpriteCounter + 1) % tileSprites.Length;
         }
 
+    }
+
+    public void SpawnOrbs()
+    {
         for (int i = 0; i < boardHeight; i++)
         {
             for (int j = 0; j < boardWidth; j++)
             {
-                tiles[i, j].currentOrb = Instantiate(orbPrefab,rect);
-                tiles[i, j].currentOrb.Initialize(BoardCoordToLocalPos(i,j), tileRadius - 2, (OrbType) Random.Range(0,6), tiles[i,j]);
+                tiles[i, j].currentOrb = Instantiate(orbPrefab, rect);
+                tiles[i, j].currentOrb.Initialize(BoardCoordToLocalPos(i, j), tileRadius - 2, (OrbType)Random.Range(0, 6), tiles[i, j]);
             }
         }
     }

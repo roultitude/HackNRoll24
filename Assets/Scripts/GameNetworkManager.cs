@@ -4,29 +4,21 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using FishNet.Object;
+using FishNet.Object.Synchronizing;
+using System.ComponentModel;
 
-public class GameNetworkManager : MonoBehaviour
+public class GameNetworkManager : NetworkBehaviour
 {
+    public static GameNetworkManager Instance;
+
     #region Serialized
     [Header("Spawning")]
-    /// <summary>
-    /// Region players may spawn.
-    /// </summary>
-    [Tooltip("Region players may spawn.")]
-    [SerializeField]
-    private Vector3 _spawnRegion = Vector3.one;
-    /// <summary>
-    /// Prefab to spawn.
-    /// </summary>
-    [Tooltip("Prefab to spawn.")]
+
     [SerializeField]
     private NetworkObject _playerPrefab = null;
-    /// <summary>
-    /// DeathDummy to spawn.
-    /// </summary>
-    [Tooltip("DeathDummy to spawn.")]
-    [SerializeField]
-    private GameObject _deathDummy = null;
+
+    public readonly SyncVar<int> rngSeed = new SyncVar<int>();
+
     #endregion
 
     /// <summary>
@@ -66,6 +58,7 @@ public class GameNetworkManager : MonoBehaviour
         _lobbyNetwork = lobbyNetwork;
         _lobbyNetwork.OnClientStarted += LobbyNetwork_OnClientStarted;
         _lobbyNetwork.OnClientLeftRoom += LobbyNetwork_OnClientLeftRoom;
+        rngSeed.Value = Random.Range(0,1000000);
     }
 
     /// <summary>
@@ -124,5 +117,17 @@ public class GameNetworkManager : MonoBehaviour
     }
     #endregion
 
+
+    private void Awake()
+    {
+        if (!Instance)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+    }
 
 }
